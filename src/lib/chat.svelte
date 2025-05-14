@@ -9,7 +9,7 @@
 
   const ol = new Ollama({ host: "http://localhost:11434"});
   // this is where the system prompt is first injected
-  let messages = $state([{ role: "system", content: system_prompt}]);
+  let messages = $derived([{ role: "system", content: system_prompt}]);
   let message = $state("");
   let ai_response = $state("Type a message to ask me a question");
   let thinking = $state(false);
@@ -98,6 +98,37 @@
       messages = [{ role: "system", content: system_prompt}];
     }
   }
+
+  const export_settings = () => {
+      const blob = new Blob([JSON.stringify({name: name, system: system_prompt})], { type: 'application/json', });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+  }
+
+  const handleFileChange = (e) => { 
+    const reader = new FileReader();
+    reader.readAsText(e.target.files[0]);
+    reader.onload = (event) => {
+      const content = event.target.result;
+      try {
+        // @ts-ignore
+        let json = JSON.parse(content); 
+        name = json.name;
+        system_prompt = json.system;
+      } catch {
+        console.log("Error!!!");
+      }
+      
+    
+    }
+    
+  };
+
+
 </script>
 
 <div class="blocker {settings_status}"></div>
@@ -135,7 +166,19 @@
 
     >Streaming: {stream_status}</button>
 
+    <button onclick={export_settings}>Export</button>
+
+    <input
+    
+      type="file"
+      placeholder="Load"
+      onchange={handleFileChange} 
+    >
+
+
     <button onclick={toggleSettings}>Done</button>
+
+
 
   </span>
 
@@ -198,6 +241,8 @@
 <style>
   .header {
     height: 10%;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   button {
