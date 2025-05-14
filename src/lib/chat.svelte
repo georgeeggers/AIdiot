@@ -9,7 +9,7 @@
 
   const ol = new Ollama({ host: "http://localhost:11434"});
   // this is where the system prompt is first injected
-  let messages = $derived([{ role: "system", content: system_prompt}]);
+  let messages = $state([{ role: "system", content: system_prompt}]);
   let message = $state("");
   let ai_response = $state("Type a message to ask me a question");
   let thinking = $state(false);
