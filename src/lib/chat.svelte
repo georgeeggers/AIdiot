@@ -49,6 +49,47 @@
     }
   }
 
+  async function regen() {
+    ai_response = "";
+    thinking = true;
+    const response = await ol.chat({
+      model: model,
+      messages: messages,
+      // I truly dont know why this is erroring, so im just gonna ignore it
+      // @ts-ignore
+      stream: stream_status,
+    });
+    let count = 0;
+
+    if(stream_status){
+      for await (const part of response){
+        ai_response += part.message.content;
+        count++;
+        if(count >= 10000){
+          break;
+        }
+      }
+    } else {
+      ai_response = response.message.content;
+    }
+    thinking = false;
+    messages.push({role: "assistant", content: ai_response});
+    // pushes system prompt after every message so that the model maintains it's system
+    if(aggressive_retention){
+      messages.push({role: "system", content: system_prompt});
+    }
+  }
+
+  const delete_to = (pos) => {
+    let target = output_messages[pos];
+    messages.splice(messages.length - pos - 1, messages.length - pos + 1);
+    if(target.role == "assistant"){
+      regen();
+    } else {
+      message = target.content;
+    }
+  }
+
   const toggleSettings = () => {
     if(settings_status == "hidden"){
       settings_status = '';
@@ -122,19 +163,22 @@
 
   {#if thinking}
     <div class="messageContainer">
-      <span class='message'>
-        {#if stream_status}
+      {#if stream_status}
+        <span class="message">
           <p1 class="role">{name}</p1>
-          <p1>{ai_response}</p1>
-        {:else}
+        </span>
+        <button style='text-align: left' class="message">{ai_response}</button>
+
+      {:else}
+        <span class="message">
           <p1 class="role">{name}</p1>
-          <p1>Thinking...</p1>
-        {/if}
-      </span>
+        </span>
+        <button style='text-align: left' class="message">Thinking...</button>
+      {/if}
     </div>
   {/if}
 
-  {#each output_messages as msg}
+  {#each output_messages as msg, i}
     {#if msg.role != "system"}
       <div class="messageContainer {msg.role}">
         <span class='message'>
@@ -143,8 +187,8 @@
           {:else}
             <p1 class="role">You</p1>
           {/if}
-          <p1 style='text-align: left;'>{msg.content}</p1>
         </span>
+        <button onclick={() => delete_to(i)} style='text-align: left' class="message">{msg.content}</button>
       </div>
     {/if}
   {/each}
@@ -154,6 +198,11 @@
 <style>
   .header {
     height: 10%;
+  }
+
+  button {
+    border: none;
+    white-space: pre-wrap;
   }
 
   .message {
@@ -172,6 +221,8 @@
     width: 100%;
     display: flex;
     box-sizing: border-box;
+    gap: 5px;
+    flex-direction: column;
   }
 
   .user {
@@ -201,6 +252,9 @@
 
   p1 {
     white-space: pre-wrap;
+    font-size: 20px;
+    text-align: left;
+    align-items: left;
   }
 
   .msgBar {
@@ -216,6 +270,10 @@
     width: 100%;
     flex-direction: column;
     box-sizing: border-box;
+  }
+
+  .message:hover {
+    outline: 2px white solid;
   }
 
   span {
@@ -248,7 +306,7 @@
 
   button {
     padding: 15px;
-    font-size: 24px;
+    font-size: 20px;
   }
 
   .hidden {
