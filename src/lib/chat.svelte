@@ -1,19 +1,21 @@
 <script>
   import { Ollama } from 'ollama';
 
-  let system_prompt = "You are a helpful AI assistant";
+  let name = $state("ChatBot");
+  let system_prompt = $derived("You are " + name + ", an AI assistant");  
   let stream_status = $state(true);
-  let model = $state("smollm:135m");
+  let model = $state("dolphin3:8b");
+  let aggressive_retention = $state(false);
 
   const ol = new Ollama({ host: "http://localhost:11434"});
-  // this is the system prompt
+  // this is where the system prompt is first injected
   let messages = $state([{ role: "system", content: system_prompt}]);
   let message = $state("");
   let ai_response = $state("Type a message to ask me a question");
- 
   let thinking = $state(false);
+  let output_messages = $derived([...messages].reverse());
+  let settings_status = $state("hidden");
 
-  // impleemnt sending logic
   async function send (){
     ai_response = "";
     messages.push({ role: 'user', content: message});
@@ -21,6 +23,7 @@
     const response = await ol.chat({
       model: model,
       messages: messages,
+      // I truly dont know why this is erroring, so im just gonna ignore it
       // @ts-ignore
       stream: stream_status,
     });
@@ -37,55 +40,114 @@
       }
     } else {
       ai_response = response.message.content;
-      console.log(response);
     }
     thinking = false;
-    
     messages.push({role: "assistant", content: ai_response});
+    // pushes system prompt after every message so that the model maintains it's system
+    if(aggressive_retention){
+      messages.push({role: "system", content: system_prompt});
+    }
+  }
+
+  const toggleSettings = () => {
+    if(settings_status == "hidden"){
+      settings_status = '';
+    } else {
+      settings_status = "hidden";
+      messages = [{ role: "system", content: system_prompt}];
+    }
   }
 </script>
+
+<div class="blocker {settings_status}"></div>
+<div class="settings {settings_status}">
+
+  <input
+  
+    type="text"
+    bind:value={name}
+    placeholder="Name"
+    style ="
+      height: 10%;
+    "
+  >
+
+  <textarea
+
+    bind:value={system_prompt}
+    placeholder="System prompt"
+  >
+
+  </textarea>
+
+    <span>
+
+    <button
+    
+      onclick={() => { aggressive_retention = !aggressive_retention}}
+
+    >Aggressive Retention: {aggressive_retention}</button>
+
+    <button
+    
+      onclick={() => { stream_status = !stream_status}}
+
+    >Streaming: {stream_status}</button>
+
+    <button onclick={toggleSettings}>Done</button>
+
+  </span>
+
+</div>
+
 <span class="header">
-  <h1>AIdiot</h1>
+  <h1>{name}</h1>
+  <button onclick={toggleSettings}>Settings</button>
 </span>
 
 <div class="chat">
 
+  <span style="width: 100vw; height: 20vh">
 
-    {#each messages as msg}
-      {#if msg.role != "system"}
-        <div class="messageContainer {msg.role}">
-          <span class='message'>
-            <p1 class="role">{msg.role}</p1>
-            <p1>{msg.content}</p1>
-          </span>
-        </div>
-      {/if}
-    {/each}
+  </span>
 
-    {#if thinking}
-      <div class="messageContainer">
-        <span class='message'>
-          {#if stream_status}
-            <p1 class="role">assistant</p1>
-            <p1>{ai_response}</p1>
-          {:else}
-            <p1 class="role">assistant</p1>
-            <p1>Thinking...</p1>
-          {/if}
-        </span>
-      </div>
-    {/if}
-
-  <span>
+  <span class="msgBar">
       <input
         onkeydown={(e) => e.key === "Enter" && send()}
         type="text"
         placeholder="Type a message"
         bind:value={message}
       >
-
-      <button onclick={send}>Send</button>
   </span>
+
+  {#if thinking}
+    <div class="messageContainer">
+      <span class='message'>
+        {#if stream_status}
+          <p1 class="role">{name}</p1>
+          <p1>{ai_response}</p1>
+        {:else}
+          <p1 class="role">{name}</p1>
+          <p1>Thinking...</p1>
+        {/if}
+      </span>
+    </div>
+  {/if}
+
+  {#each output_messages as msg}
+    {#if msg.role != "system"}
+      <div class="messageContainer {msg.role}">
+        <span class='message'>
+          {#if msg.role == "assistant"}
+            <p1 class="role">{name}</p1>
+          {:else}
+            <p1 class="role">You</p1>
+          {/if}
+          <p1 style='text-align: left;'>{msg.content}</p1>
+        </span>
+      </div>
+    {/if}
+  {/each}
  
 </div>
 
@@ -95,13 +157,15 @@
   }
 
   .message {
-    width: 80%;
+    width: 100%;
     padding: 10px;
     display: flex;
     box-sizing: border-box;
     background-color: #2f2f2f;
     border-radius: 8px;
     flex-direction: column;
+    flex-wrap: wrap;
+    word-wrap: anywhere;
   }
 
   .messageContainer {
@@ -129,13 +193,21 @@
     align-items: center;
     display: flex;
     box-sizing: border-box;
+    flex: 1;
     padding: 2em;
-    flex-direction: column;
+    flex-direction: column-reverse;
     gap: 1em;
   }
 
   p1 {
     white-space: pre-wrap;
+  }
+
+  .msgBar {
+    position: fixed;
+    top: 82vh;
+    width: 90vw;
+    height: 10vh;
   }
 
   .response {
@@ -157,23 +229,55 @@
   }
 
   input{
-    width: 90%;
+    width: 100%;
     height: 100%;
+    padding: 15px;
+    font-size: 24px;
+    display: flex;
+    box-sizing: border-box;
+  }
+
+  textarea {
+    width: 100%;
+    height: 100%;
+    padding: 15px;
+    font-size: 24px;
+    display: flex;
+    box-sizing: border-box;
+  }
+
+  button {
     padding: 15px;
     font-size: 24px;
   }
 
-  button {
-    width: 10%;
-    padding: 15px;
-    font-size: 150%;
-    height: 100%;
-    cursor: pointer;
-    box-sizing: border-box;
-    display: flex;
+  .hidden {
+    visibility: hidden;
   }
 
-  button:hover {
-    border: 2px solid white;
+  .blocker {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    background-color: rgba(0, 0, 0, 0.8);
+    top: 0;
+    left: 0;
+    z-index: 50;
+  }
+
+  .settings {
+    width: 80vw;
+    height: 80vh;
+    top: 10vh;
+    left: 10vw;
+    position: fixed;
+    z-index: 75;
+    background-color: #2a2a2a;
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    padding: 2em;
+    gap: 2px;
+    flex-direction: column;
   }
 </style>
