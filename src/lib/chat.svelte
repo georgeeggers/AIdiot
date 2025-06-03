@@ -13,12 +13,136 @@
   let message = $state("");
   let ai_response = $state("Type a message to ask me a question");
   let thinking = $state(false);
-  let output_messages = $derived([...messages].reverse());
+  let output_messages = $state([]);
   let settings_status = $state("hidden");
+  let output_msg = $state([{type: "normal", content: ""}]);
+  let index = 0;
+
+  const scrolldown = () => {
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+
+  const is_key = (input, map) => {
+    let t_index = 0;
+    for(let i of map){
+      if(i.id == input){
+        return t_index;
+      }
+      t_index++;
+    }
+    return -1;
+  }
+
+  const test_parser = (input) => {
+    let mapping = [
+      {
+        id: "*",
+        type: "ast"
+      },
+      {
+        id: "\"",
+        type: "quote"
+      },
+      {
+        id: "\`",
+        type: "code"
+      }
+    ];
+
+    let sub_index = 0;
+    let mode = "";
+    console.log(index);
+    output_msg[index].type = "normal";
+    for(let i of input){
+      sub_index = is_key(i, mapping);
+      if(sub_index != -1){
+        if(mode == ""){
+          output_msg.push({type: mapping[sub_index].type, content: ""});
+          mode = i;
+          index++;
+          console.log(`Index now ${index}`);
+          console.log(output_msg);
+        } else if (mode == i){
+          console.log("Terminating Character found!");
+          output_msg[index].content += mapping[sub_index].id;
+          output_msg.push({type: "normal", content: ""});
+          index++;
+          console.log(`Index now ${index}`);
+          console.log(output_msg);
+          mode = "";
+          continue;
+        }
+      }
+      output_msg[index].content += i;
+    }
+    /*
+    sub_index = 0;
+    for(let i of output_msg){
+      if(i.content == ""){
+        console.log("Removing");
+        output_msg.splice(sub_index, 1);
+      }
+      sub_index++;
+    }
+    */
+  }
+
+  const parse_whole = (input) => {
+    let output_msg = [{type: "normal", content: ""}];
+    let mapping = [
+      {
+        id: "*",
+        type: "ast"
+      },
+      {
+        id: "\"",
+        type: "quote"
+      },
+      {
+        id: "\`",
+        type: "code"
+      }
+    ];
+
+    let index = 0;
+    let sub_index = 0;
+    let mode = "";
+    output_msg[index].type = "normal";
+    for(let i of input){
+      sub_index = is_key(i, mapping);
+      if(sub_index != -1){
+        if(mode == ""){
+          output_msg.push({type: mapping[sub_index].type, content: ""});
+          mode = i;
+          index++;
+        } else if (mode == i){
+          console.log("Terminating Character found!");
+          output_msg[index].content += mapping[sub_index].id;
+          output_msg.push({type: "normal", content: ""});
+          index++;
+          mode = "";
+          continue;
+        }
+      }
+      output_msg[index].content += i;
+    }
+    index = 0;
+    for(let i of output_msg){
+      if(i.content == ""){
+        console.log("Removing");
+        output_msg.splice(index, 1);
+      }
+      index++;
+    }
+    return output_msg;
+  }
 
   async function send (){
     ai_response = "";
+    output_msg = [{type: "normal", content: ""}];
     messages.push({ role: 'user', content: message});
+    output_messages.push({role: "user", content: parse_whole(message)});
     thinking = true;
     const response = await ol.chat({
       model: model,
@@ -29,24 +153,20 @@
     });
     message = "";
     let count = 0;
-
-    if(stream_status){
-      for await (const part of response){
-        ai_response += part.message.content;
-        count++;
-        if(count >= 10000){
-          break;
-        }
-      }
-    } else {
-      ai_response = response.message.content;
+    index = 0;
+    for await (const part of response){
+      ai_response += part.message.content;
+      test_parser(part.message.content);
+      console.log(output_msg);
     }
     thinking = false;
     messages.push({role: "assistant", content: ai_response});
+    output_messages.push({role: "assistant", content: parse_whole(ai_response)});
     // pushes system prompt after every message so that the model maintains it's system
     if(aggressive_retention){
       messages.push({role: "system", content: system_prompt});
     }
+    console.log(output_messages);
   }
 
   async function regen() {
@@ -191,10 +311,6 @@
 
 <div class="chat">
 
-  <span style="width: 100vw; height: 20vh">
-
-  </span>
-
   <span class="msgBar">
       <input
         onkeydown={(e) => e.key === "Enter" && send()}
@@ -204,41 +320,56 @@
       >
   </span>
 
-  {#if thinking}
-    <div class="messageContainer">
-      {#if stream_status}
-        <span class="message">
-          <p1 class="role">{name}</p1>
-        </span>
-        <button style='text-align: left' class="message">{ai_response}</button>
-
-      {:else}
-        <span class="message">
-          <p1 class="role">{name}</p1>
-        </span>
-        <button style='text-align: left' class="message">Thinking...</button>
-      {/if}
-    </div>
-  {/if}
-
   {#each output_messages as msg, i}
     {#if msg.role != "system"}
       <div class="messageContainer {msg.role}">
-        <span class='message'>
-          {#if msg.role == "assistant"}
-            <p1 class="role">{name}</p1>
-          {:else}
-            <p1 class="role">You</p1>
-          {/if}
+        <span class="message">
+          <p1>
+            {#each msg.content as chunk}
+              <i class="{chunk.type}">{chunk.content}</i>
+            {/each}
+          </p1>
         </span>
-        <button onclick={() => delete_to(i)} style='text-align: left' class="message">{msg.content}</button>
       </div>
     {/if}
   {/each}
+
+  {#if thinking}
+    <div class="messageContainer">
+        <span class="message">
+          <p1>
+            {#each output_msg as chunk}
+              <i class="{chunk.type}">{chunk.content}</i>
+            {/each}
+          </p1>
+        </span>
+    </div>
+  {/if}
+
+  <span style="width: 100vw; height: 20vh">
+
+  </span>
  
 </div>
 
 <style>
+
+  .ast {
+    color: rgb(25, 191, 209);
+  }
+
+  .quote {
+    color: rgb(232, 127, 29);
+  }
+
+  .code {
+    background-color: #1a1a1a;
+    display: flex;
+    box-sizing: border-box;
+    padding: 10px;
+    border-radius: 10px;
+  }
+
   .header {
     height: 10%;
     width: 100%;
@@ -248,6 +379,10 @@
   button {
     border: none;
     white-space: pre-wrap;
+  }
+
+  i {
+    font-style: normal;
   }
 
   .message {
@@ -291,7 +426,7 @@
     box-sizing: border-box;
     flex: 1;
     padding: 2em;
-    flex-direction: column-reverse;
+    flex-direction: column;
     gap: 1em;
   }
 
