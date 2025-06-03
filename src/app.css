@@ -6,6 +6,7 @@
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
   box-sizing: border-box;
+  --main-color: rgb(47, 187, 187);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -14,6 +15,29 @@
   overflow: none;
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+@font-face {
+  font-family: "icon";
+  src: url('byom_icons/Byom-Icons-Trial.ttf');
+}
+
+.icon {
+  font-family: "icon";
+  text-decoration: none;
+  font-style: normal;
+  background: none;
+}
+
+.highlight {
+  color: white;
+  transition:
+    color 250ms ease  
+  ;
+}
+
+.highlight:hover {
+  color: var(--main-color);
 }
 
 * {
@@ -27,6 +51,10 @@ a {
 }
 a:hover {
   color: #535bf2;
+}
+
+#app {
+  flex-direction: row;
 }
 
 body {

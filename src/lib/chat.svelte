@@ -1,11 +1,26 @@
 <script>
   import { Ollama } from 'ollama';
-
+  import { tick } from 'svelte';
   let name = $state("ChatBot");
-  let system_prompt = $derived("You are " + name + ", an AI assistant");  
+  let system_prompt = $derived("");  
   let stream_status = $state(true);
   let model = $state("dolphin3:8b");
   let aggressive_retention = $state(false);
+
+  let mapping = [
+  {
+    id: "*",
+    type: "ast"
+  },
+  {
+    id: "\"",
+    type: "quote"
+  },
+  {
+    id: "\`",
+    type: "code"
+  }
+];
 
   const ol = new Ollama({ host: "http://localhost:11434"});
   // this is where the system prompt is first injected
@@ -16,10 +31,14 @@
   let output_messages = $state([]);
   let settings_status = $state("hidden");
   let output_msg = $state([{type: "normal", content: ""}]);
-  let index = 0;
+  let index = $state(0);
+  let mode = $state("");
 
-  const scrolldown = () => {
+
+  const scrolldown = async () => {
+    await tick();
     window.scrollTo(0, document.body.scrollHeight);
+
   }
 
 
@@ -34,58 +53,27 @@
     return -1;
   }
 
-  const test_parser = (input) => {
-    let mapping = [
-      {
-        id: "*",
-        type: "ast"
-      },
-      {
-        id: "\"",
-        type: "quote"
-      },
-      {
-        id: "\`",
-        type: "code"
-      }
-    ];
-
+  const test_parser = (i) => {
     let sub_index = 0;
-    let mode = "";
-    console.log(index);
-    output_msg[index].type = "normal";
-    for(let i of input){
-      sub_index = is_key(i, mapping);
-      if(sub_index != -1){
-        if(mode == ""){
-          output_msg.push({type: mapping[sub_index].type, content: ""});
-          mode = i;
-          index++;
-          console.log(`Index now ${index}`);
-          console.log(output_msg);
-        } else if (mode == i){
-          console.log("Terminating Character found!");
-          output_msg[index].content += mapping[sub_index].id;
-          output_msg.push({type: "normal", content: ""});
-          index++;
-          console.log(`Index now ${index}`);
-          console.log(output_msg);
-          mode = "";
-          continue;
-        }
+    sub_index = is_key(i, mapping);
+    if(sub_index != -1){
+      if(mode == ""){
+        console.log({type: mapping[sub_index].type, content: ""})
+        output_msg.push({type: mapping[sub_index].type, content: ""});
+
+        mode = i;
+        console.log(mode);
+        index++;
+      } else if (mode == i){
+        console.log("Terminating Character found!");
+        output_msg[index].content += mapping[sub_index].id;
+        output_msg.push({type: "normal", content: ""});
+        index++;
+        mode = "";
+        return;
       }
-      output_msg[index].content += i;
     }
-    /*
-    sub_index = 0;
-    for(let i of output_msg){
-      if(i.content == ""){
-        console.log("Removing");
-        output_msg.splice(sub_index, 1);
-      }
-      sub_index++;
-    }
-    */
+    output_msg[index].content += i;
   }
 
   const parse_whole = (input) => {
@@ -117,7 +105,6 @@
           mode = i;
           index++;
         } else if (mode == i){
-          console.log("Terminating Character found!");
           output_msg[index].content += mapping[sub_index].id;
           output_msg.push({type: "normal", content: ""});
           index++;
@@ -130,7 +117,6 @@
     index = 0;
     for(let i of output_msg){
       if(i.content == ""){
-        console.log("Removing");
         output_msg.splice(index, 1);
       }
       index++;
@@ -142,6 +128,7 @@
     ai_response = "";
     output_msg = [{type: "normal", content: ""}];
     messages.push({ role: 'user', content: message});
+    scrolldown();
     output_messages.push({role: "user", content: parse_whole(message)});
     thinking = true;
     const response = await ol.chat({
@@ -152,21 +139,22 @@
       stream: stream_status,
     });
     message = "";
-    let count = 0;
     index = 0;
     for await (const part of response){
       ai_response += part.message.content;
-      test_parser(part.message.content);
-      console.log(output_msg);
+      for(let i of part.message.content){
+        test_parser(i);
+        scrolldown();
+      }
     }
     thinking = false;
+
     messages.push({role: "assistant", content: ai_response});
     output_messages.push({role: "assistant", content: parse_whole(ai_response)});
     // pushes system prompt after every message so that the model maintains it's system
     if(aggressive_retention){
       messages.push({role: "system", content: system_prompt});
     }
-    console.log(output_messages);
   }
 
   async function regen() {
@@ -179,21 +167,19 @@
       // @ts-ignore
       stream: stream_status,
     });
-    let count = 0;
-
-    if(stream_status){
-      for await (const part of response){
-        ai_response += part.message.content;
-        count++;
-        if(count >= 10000){
-          break;
-        }
+    message = "";
+    index = 0;
+    for await (const part of response){
+      ai_response += part.message.content;
+      for(let i of part.message.content){
+        test_parser(i);
+        scrolldown();
       }
-    } else {
-      ai_response = response.message.content;
     }
     thinking = false;
+
     messages.push({role: "assistant", content: ai_response});
+    output_messages.push({role: "assistant", content: parse_whole(ai_response)});
     // pushes system prompt after every message so that the model maintains it's system
     if(aggressive_retention){
       messages.push({role: "system", content: system_prompt});
@@ -242,13 +228,8 @@
       } catch {
         console.log("Error!!!");
       }
-      
-    
     }
-    
   };
-
-
 </script>
 
 <div class="blocker {settings_status}"></div>
@@ -289,23 +270,17 @@
     <button onclick={export_settings}>Export</button>
 
     <input
-    
       type="file"
       placeholder="Load"
       onchange={handleFileChange} 
     >
-
-
     <button onclick={toggleSettings}>Done</button>
-
-
-
   </span>
 
 </div>
 
 <span class="header">
-  <h1>{name}</h1>
+  <h1 style="color: var(--main-color);">{name}</h1>
   <button onclick={toggleSettings}>Settings</button>
 </span>
 
@@ -322,8 +297,18 @@
 
   {#each output_messages as msg, i}
     {#if msg.role != "system"}
-      <div class="messageContainer {msg.role}">
-        <span class="message">
+      <div class="messageContainer">
+        <span class="message {msg.role}">
+          <span class="controlBar">
+            {#if msg.role == "assistant"}
+              <h3>{name}</h3>
+              <button class="icon highlight">E</button>
+              <button onclick={() => delete_to(i)} class="icon highlight">B</button>
+            {:else if msg.role == "user"}
+              <h3>You</h3>
+              <button onclick={() => delete_to(i)} class="icon highlight">U</button>
+            {/if}
+          </span>
           <p1>
             {#each msg.content as chunk}
               <i class="{chunk.type}">{chunk.content}</i>
@@ -336,23 +321,37 @@
 
   {#if thinking}
     <div class="messageContainer">
-        <span class="message">
-          <p1>
-            {#each output_msg as chunk}
-              <i class="{chunk.type}">{chunk.content}</i>
-            {/each}
-          </p1>
-        </span>
+      <div class="message assistant">
+        <span class="controlBar">
+            <h3>{name}</h3>
+            <button class="icon highlight">E</button>
+            <button class="icon highlight">B</button>
+          </span>
+        <p1>
+          {#each output_msg as chunk}
+            <i class="{chunk.type}">{chunk.content}</i>
+          {/each}
+        </p1>
+      </div>
     </div>
   {/if}
 
   <span style="width: 100vw; height: 20vh">
 
   </span>
- 
+
 </div>
 
 <style>
+
+  .controlBar {
+    width: 100%;
+    height: 40px;
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    box-sizing: border-box;
+  }
 
   .ast {
     color: rgb(25, 191, 209);
@@ -386,7 +385,7 @@
   }
 
   .message {
-    width: 100%;
+    width: 80%;
     padding: 10px;
     display: flex;
     box-sizing: border-box;
@@ -395,6 +394,8 @@
     flex-direction: column;
     flex-wrap: wrap;
     word-wrap: anywhere;
+    text-align: left;
+    justify-content: left;
   }
 
   .messageContainer {
@@ -406,11 +407,11 @@
   }
 
   .user {
-    align-items: right;
+    margin-left: 20%;
   }
 
   .assistant {
-    align-items: left;
+    margin-right: 20%;
   }
 
   .role {
@@ -450,10 +451,6 @@
     width: 100%;
     flex-direction: column;
     box-sizing: border-box;
-  }
-
-  .message:hover {
-    outline: 2px white solid;
   }
 
   span {
