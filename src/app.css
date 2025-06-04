@@ -4,7 +4,7 @@
   font-weight: 400;
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  background-color: #1a1a1a;
   box-sizing: border-box;
   --main-color: rgb(47, 187, 187);
 
@@ -40,17 +40,19 @@
   color: var(--main-color);
 }
 
-* {
+.highlight * {
   color: white;
+  transition:
+    color 250ms ease  
+  ;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+.highlight:hover * {
+  color: var(--main-color);
 }
-a:hover {
-  color: #535bf2;
+
+* {
+  color: white;
 }
 
 #app {
@@ -62,6 +64,13 @@ body {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+}
+
+input {
+  -webkit-user-select: none; /* Safari */
+  -ms-user-select: none; /* IE 10 and IE 11 */
+  user-select: none; /* Standard syntax */
+  outline: none;
 }
 
 h1 {

@@ -2,7 +2,7 @@
   import { Ollama } from 'ollama';
   import { tick } from 'svelte';
   let name = $state("ChatBot");
-  let system_prompt = $derived("");  
+  let system_prompt = $state("You are ChatBot, a helpful AI assistant");  
   let stream_status = $state(true);
   let model = $state("dolphin3:8b");
   let aggressive_retention = $state(false);
@@ -22,8 +22,9 @@
   }
 ];
 
-  const ol = new Ollama({ host: "http://localhost:11434"});
+  const ol = new Ollama({host: "http://localhost:11434"});
   // this is where the system prompt is first injected
+  // svelte-ignore state_referenced_locally
   let messages = $state([{ role: "system", content: system_prompt}]);
   let message = $state("");
   let ai_response = $state("Type a message to ask me a question");
@@ -53,27 +54,36 @@
     return -1;
   }
 
-  const test_parser = (i) => {
+  const parser = async (input) => {
     let sub_index = 0;
-    sub_index = is_key(i, mapping);
-    if(sub_index != -1){
-      if(mode == ""){
-        console.log({type: mapping[sub_index].type, content: ""})
-        output_msg.push({type: mapping[sub_index].type, content: ""});
-
-        mode = i;
-        console.log(mode);
-        index++;
-      } else if (mode == i){
-        console.log("Terminating Character found!");
-        output_msg[index].content += mapping[sub_index].id;
-        output_msg.push({type: "normal", content: ""});
-        index++;
-        mode = "";
-        return;
+    for(let i of input){
+      sub_index = is_key(i, mapping);
+      if(sub_index != -1){
+        if(mode == ""){
+          output_msg.push({type: mapping[sub_index].type, content: ""});
+          mode = i;
+          index++;
+        } else if (mode == i){
+          console.log("Terminating Character found!");
+          output_msg[index].content += mapping[sub_index].id;
+          output_msg.push({type: "normal", content: ""});
+          index++;
+          mode = "";
+          continue;
+        }
       }
+      output_msg[index].content += i;
     }
-    output_msg[index].content += i;
+    /*
+    sub_index = 0;
+    for(let i of output_msg){
+      if(i.content == ""){
+        console.log("Removing");
+        output_msg.splice(sub_index, 1);
+      }
+      sub_index++;
+    }
+    */  
   }
 
   const parse_whole = (input) => {
@@ -143,7 +153,7 @@
     for await (const part of response){
       ai_response += part.message.content;
       for(let i of part.message.content){
-        test_parser(i);
+        parser(i);
         scrolldown();
       }
     }
@@ -159,6 +169,7 @@
 
   async function regen() {
     ai_response = "";
+    output_msg = [{type: "normal", content: ""}];
     thinking = true;
     const response = await ol.chat({
       model: model,
@@ -172,7 +183,7 @@
     for await (const part of response){
       ai_response += part.message.content;
       for(let i of part.message.content){
-        test_parser(i);
+        parser(i);
         scrolldown();
       }
     }
@@ -188,11 +199,10 @@
 
   const delete_to = (pos) => {
     let target = output_messages[pos];
-    messages.splice(messages.length - pos - 1, messages.length - pos + 1);
+    messages.splice(pos + 1, messages.length - pos - 1);
+    output_messages.splice(pos, output_messages.length - pos);
     if(target.role == "assistant"){
       regen();
-    } else {
-      message = target.content;
     }
   }
 
@@ -201,8 +211,11 @@
       settings_status = '';
     } else {
       settings_status = "hidden";
-      messages = [{ role: "system", content: system_prompt}];
+      messages = [];
+      messages.push({role: "system", content: system_prompt});
+      output_messages = [];
     }
+    console.log(messages);
   }
 
   const export_settings = () => {
@@ -232,7 +245,7 @@
   };
 </script>
 
-<div class="blocker {settings_status}"></div>
+<label for="close" class="blocker {settings_status}"></label>
 <div class="settings {settings_status}">
 
   <input
@@ -246,74 +259,58 @@
   >
 
   <textarea
-
+    style="height: 80%;"
     bind:value={system_prompt}
     placeholder="System prompt"
   >
 
   </textarea>
+    <span style="height: 10%;">
+      <label for="export" class="controlLabel highlight">
+        <p1>Export</p1>
+      </label>
 
-    <span>
+      <!-- svelte-ignore a11y_consider_explicit_label -->
+      <button id="export" onclick={export_settings} class="controlLabel highlight"
+        style="visibility: hidden; position: fixed;"
+      ></button>
 
-    <button
-    
-      onclick={() => { aggressive_retention = !aggressive_retention}}
-
-    >Aggressive Retention: {aggressive_retention}</button>
-
-    <button
-    
-      onclick={() => { stream_status = !stream_status}}
-
-    >Streaming: {stream_status}</button>
-
-    <button onclick={export_settings}>Export</button>
-
-    <input
-      type="file"
-      placeholder="Load"
-      onchange={handleFileChange} 
-    >
-    <button onclick={toggleSettings}>Done</button>
-  </span>
-
+      <label class="controlLabel highlight" for="load">
+        <p1>Load</p1>
+      </label>
+      <input
+        id="load"
+        type="file"
+        placeholder="Load"
+        style="position: fixed; visibility: hidden"
+        onchange={handleFileChange} 
+      >
+    </span>
+    <label class="controlLabel highlight" for="close">
+      <p1>Done</p1>
+    </label>
+    <button id="close" style="visibility: hidden; position: fixed;" onclick={toggleSettings}>Done</button>
 </div>
 
-<span class="header">
-  <h1 style="color: var(--main-color);">{name}</h1>
-  <button onclick={toggleSettings}>Settings</button>
-</span>
-
 <div class="chat">
-
-  <span class="msgBar">
-      <input
-        onkeydown={(e) => e.key === "Enter" && send()}
-        type="text"
-        placeholder="Type a message"
-        bind:value={message}
-      >
-  </span>
 
   {#each output_messages as msg, i}
     {#if msg.role != "system"}
       <div class="messageContainer">
-        <span class="message {msg.role}">
-          <span class="controlBar">
-            {#if msg.role == "assistant"}
-              <h3>{name}</h3>
-              <button class="icon highlight">E</button>
-              <button onclick={() => delete_to(i)} class="icon highlight">B</button>
-            {:else if msg.role == "user"}
-              <h3>You</h3>
-              <button onclick={() => delete_to(i)} class="icon highlight">U</button>
-            {/if}
-          </span>
+        <div class="message {msg.role}">
           <p1>
             {#each msg.content as chunk}
               <i class="{chunk.type}">{chunk.content}</i>
             {/each}
           </p1>
+        </div>
+        <span class="controlBar {msg.role}">
+          {#if msg.role == "assistant"}
+            <button class="icon highlight">E</button>
+            <button onclick={() => delete_to(i)} class="icon highlight">B</button>
+          {:else if msg.role == "user"}
+            <button onclick={() => delete_to(i)} class="icon highlight">U</button>
+          {/if}
         </span>
       </div>
     {/if}
@@ -322,35 +319,81 @@
   {#if thinking}
     <div class="messageContainer">
       <div class="message assistant">
-        <span class="controlBar">
-            <h3>{name}</h3>
-            <button class="icon highlight">E</button>
-            <button class="icon highlight">B</button>
-          </span>
         <p1>
           {#each output_msg as chunk}
             <i class="{chunk.type}">{chunk.content}</i>
           {/each}
         </p1>
       </div>
+      <span class="controlBar assistant">
+        <button class="icon highlight">E</button>
+        <button class="icon highlight">B</button>
+      </span>
     </div>
   {/if}
 
   <span style="width: 100vw; height: 20vh">
 
   </span>
-
+    <span class="msgBar msg{messages.length}">
+      <input
+        onkeydown={(e) => e.key === "Enter" && send()}
+        type="text"
+        placeholder="Type a message"
+        bind:value={message}
+      >
+      <span class="controlBar" style="background: none; width: 100%; height: 50px;">
+        <p1>{name}</p1>
+        {#if !thinking}
+          <button onclick={toggleSettings} class="icon highlight">_</button>
+        {:else}
+          <button onclick={
+            () => {
+              ol.abort();
+              messages.push({role: "assistant", content: ai_response});
+              output_messages.push({role: "assistant", content: parse_whole(ai_response)});
+              thinking = false;
+            }
+          } class="icon highlight">!</button>
+        {/if}
+      </span>
+    </span>
 </div>
 
 <style>
 
+  .msg1{
+    transform: translateY(-37.5vh);
+  }
+
+  .controlLabel {
+    background-color: #1a1a1a;
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    padding: 10px;
+    border-radius: 10px;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  .true {
+    color: rgb(10, 199, 82) !important;
+  }
+
   .controlBar {
     width: 100%;
-    height: 40px;
+    height: 50px;
+    align-items: right;
+    justify-content: right;
+    width: 80%;
     display: flex;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
     flex-direction: row;
     gap: 10px;
     box-sizing: border-box;
+    background-color: #242424;
   }
 
   .ast {
@@ -390,7 +433,8 @@
     display: flex;
     box-sizing: border-box;
     background-color: #2f2f2f;
-    border-radius: 8px;
+    border-top-right-radius: 10px;
+    border-top-left-radius: 10px;
     flex-direction: column;
     flex-wrap: wrap;
     word-wrap: anywhere;
@@ -402,8 +446,8 @@
     width: 100%;
     display: flex;
     box-sizing: border-box;
-    gap: 5px;
     flex-direction: column;
+    text-align: left;
   }
 
   .user {
@@ -440,9 +484,23 @@
 
   .msgBar {
     position: fixed;
-    top: 82vh;
+    top: 80vh;
     width: 90vw;
-    height: 10vh;
+    height: 15vh;
+    background-color: #242424;
+    display: flex;
+    box-sizing: border-box;
+    flex-direction: column;
+    border-radius: 20px;
+    transition:
+      transform 750ms ease
+    ;
+  }
+
+  .msgBar input {
+    background: none;
+    border: none;
+
   }
 
   .response {
@@ -472,13 +530,21 @@
     box-sizing: border-box;
   }
 
-  textarea {
+  textarea, .settings input[type='text'] {
     width: 100%;
     height: 100%;
     padding: 15px;
     font-size: 24px;
     display: flex;
+    background-color: #1a1a1a;
+    border: none;
+    border-radius: 10px;
+    resize: none;
     box-sizing: border-box;
+  }
+
+  textarea::placeholder, .settings input::placeholder {
+    color: #404040;
   }
 
   button {
@@ -487,17 +553,21 @@
   }
 
   .hidden {
-    visibility: hidden;
+    transform: translateY(-100vh);
   }
 
   .blocker {
     width: 100vw;
     height: 100vh;
     position: fixed;
-    background-color: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.5);
     top: 0;
     left: 0;
     z-index: 50;
+    scale: 1;
+    transition:
+      transform 1000ms ease
+    ;
   }
 
   .settings {
@@ -511,8 +581,12 @@
     display: flex;
     box-sizing: border-box;
     flex-direction: column;
+    border-radius: 20px;
     padding: 2em;
     gap: 2px;
     flex-direction: column;
+    transition:
+      transform 1000ms ease
+    ;
   }
 </style>
