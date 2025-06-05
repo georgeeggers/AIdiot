@@ -34,7 +34,8 @@
   let output_msg = $state([{type: "normal", content: ""}]);
   let index = $state(0);
   let mode = $state("");
-
+  let edit_index = $state(0);
+  let edit_vis = $state(false);
 
   const scrolldown = async () => {
     await tick();
@@ -199,10 +200,13 @@
 
   const delete_to = (pos) => {
     let target = output_messages[pos];
-    messages.splice(pos + 1, messages.length - pos - 1);
     output_messages.splice(pos, output_messages.length - pos);
     if(target.role == "assistant"){
+      messages.splice(pos + 1, messages.length - pos - 1);
       regen();
+    } else {
+      message = messages[pos + 1].content;
+      messages.splice(pos + 1, messages.length - pos - 1);
     }
   }
 
@@ -297,16 +301,39 @@
   {#each output_messages as msg, i}
     {#if msg.role != "system"}
       <div class="messageContainer">
-        <div class="message {msg.role}">
-          <p1>
-            {#each msg.content as chunk}
-              <i class="{chunk.type}">{chunk.content}</i>
-            {/each}
-          </p1>
-        </div>
+        {#if edit_index == i + 1 && edit_vis}
+          <textarea
+            class="editMsg"
+            bind:value={messages[i + 1].content}
+          >
+          </textarea>
+        {:else}
+          <div class="message {msg.role}">
+            <p1>
+              {#each msg.content as chunk}
+                <i class="{chunk.type}">{chunk.content}</i>
+              {/each}
+            </p1>
+          </div>
+        {/if}
+
         <span class="controlBar {msg.role}">
           {#if msg.role == "assistant"}
-            <button class="icon highlight">E</button>
+            {#if !edit_vis || edit_index - 1 != i}
+            <button onclick={() => {
+              if(!edit_vis){
+                edit_index = i + 1;
+                edit_vis = true;
+                console.log(messages);
+              }
+            }}
+            class="icon highlight">E</button>
+            {:else}
+              <button onclick={() => {
+                output_messages[i].content = parse_whole(messages[i + 1].content);
+                edit_vis = false;
+              }} class="icon highlight">V</button>
+            {/if}
             <button onclick={() => delete_to(i)} class="icon highlight">B</button>
           {:else if msg.role == "user"}
             <button onclick={() => delete_to(i)} class="icon highlight">U</button>
@@ -379,6 +406,17 @@
 
   .true {
     color: rgb(10, 199, 82) !important;
+  }
+
+  .editMsg {
+    width: 80%;
+    background-color: #2f2f2f;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border: 2px solid var(--main-color);
+    outline: none;
+    font-size: 20px;
+    font-weight: 0;
   }
 
   .controlBar {
