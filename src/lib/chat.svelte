@@ -4,7 +4,6 @@
   let name = $state("ChatBot");
   let system_prompt = $state("You are ChatBot, a helpful AI assistant");  
   let stream_status = $state(true);
-  let model = $state("dolphin3:8b");
   let aggressive_retention = $state(false);
 
   let mapping = [
@@ -36,6 +35,20 @@
   let mode = $state("");
   let edit_index = $state(0);
   let edit_vis = $state(false);
+  let models = $state([]);
+  let model = $state("");
+  let n_head = $state("");
+  let n_status = $state("hidden");
+  let n_body = $state("");
+
+  const notify = (head, body, time) => {
+    n_head = head;
+    n_body = body;
+    n_status = "";
+    setTimeout(() => {
+      n_status = "hidden";
+    }, time);
+  }
 
   const scrolldown = async () => {
     await tick();
@@ -136,6 +149,10 @@
   }
 
   async function send (){
+    if(model == ""){
+      notify("Error: No model loaded", "Please select a model from the settings menu", 5000);
+      return;
+    }
     ai_response = "";
     output_msg = [{type: "normal", content: ""}];
     messages.push({ role: 'user', content: message});
@@ -169,6 +186,10 @@
   }
 
   async function regen() {
+    if(model == ""){
+      notify("Error: No model loaded", "Please select a model from the settings menu", 5000);
+      return;
+    }
     ai_response = "";
     output_msg = [{type: "normal", content: ""}];
     thinking = true;
@@ -210,8 +231,12 @@
     }
   }
 
-  const toggleSettings = () => {
+  const toggleSettings = async () => {
     if(settings_status == "hidden"){
+      let response = await ol.list();
+      models = response.models;
+      model = models[0].name;
+      console.log(models);
       settings_status = '';
     } else {
       settings_status = "hidden";
@@ -249,6 +274,12 @@
   };
 </script>
 
+<label for="closeNotif" class="notification {n_status}">
+  <h2>{n_head}</h2>
+  <p1>{n_body}</p1>
+</label>
+
+<button style="position: fixed; visibility: hidden;" id="closeNotif" onclick={() => {n_status = "hidden";}}>Close</button>
 <label for="close" class="blocker {settings_status}"></label>
 <div class="settings {settings_status}">
 
@@ -263,12 +294,23 @@
   >
 
   <textarea
-    style="height: 80%;"
+    style="height: 60%;"
     bind:value={system_prompt}
     placeholder="System prompt"
   >
-
   </textarea>
+
+  <div class="dropdown controlItem">
+    Current model
+    <button class="hoverButton controlItem">{model}</button>
+
+    <div class="content">
+      {#each models as m}
+        <button onclick={() => {model = m.name;}} class="dropButton controlItem">{m.name}</button>
+      {/each}
+    </div>
+  </div>
+
     <span style="height: 10%;">
       <label for="export" class="controlLabel highlight">
         <p1>Export</p1>
@@ -388,6 +430,31 @@
 </div>
 
 <style>
+
+  .notification {
+    z-index: 100;
+    position: fixed;
+    width: 40vw;
+    left: 5vw;
+    top: 5vh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    padding: 20px;
+    border: 2px solid var(--main-color);
+    background-color: #1a1a1a;
+    border-radius: 20px;
+    opacity: 1;
+    transition: 
+      transform 1000ms ease,
+      opacity 1000ms ease
+    ;
+  }
+
+  .notification.hidden {
+    transform: translateX(-35vw);
+    opacity: 0;
+  }
 
   .msg1{
     transform: translateY(-37.5vh);
