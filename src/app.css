@@ -4,9 +4,13 @@
   font-weight: 400;
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #1a1a1a;
   box-sizing: border-box;
   --main-color: rgb(47, 187, 187);
+  --bg-color: #1a1a1a;
+  --control-color: #2f2f2f;
+  --body-color: #242424;
+  background-color: var(--bg-color);
+
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -15,6 +19,22 @@
   overflow: none;
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+.ast {
+  color: rgb(25, 191, 209);
+}
+
+.quote {
+  color: rgb(232, 127, 29);
+}
+
+.code {
+  background-color: var(--bg-color);
+  display: flex;
+  box-sizing: border-box;
+  padding: 10px;
+  border-radius: 10px;
 }
 
 @font-face {

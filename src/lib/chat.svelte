@@ -1,6 +1,7 @@
 <script>
-  import { Ollama } from 'ollama';
   import { tick } from 'svelte';
+  import { settings, export_settings, ol, parse_model_name } from '../global.svelte';
+  import { replace } from 'svelte-spa-router';
   let name = $state("ChatBot");
   let system_prompt = $state("You are ChatBot, a helpful AI assistant");  
   let stream_status = $state(true);
@@ -21,7 +22,6 @@
   }
 ];
 
-  const ol = new Ollama({host: "http://localhost:11434"});
   // this is where the system prompt is first injected
   // svelte-ignore state_referenced_locally
   let messages = $state([{ role: "system", content: system_prompt}]);
@@ -36,7 +36,6 @@
   let edit_index = $state(0);
   let edit_vis = $state(false);
   let models = $state([]);
-  let model = $state("");
   let n_head = $state("");
   let n_status = $state("hidden");
   let n_body = $state("");
@@ -149,7 +148,7 @@
   }
 
   async function send (){
-    if(model == ""){
+    if(settings.model == "Load a model..."){
       notify("Error: No model loaded", "Please select a model from the settings menu", 5000);
       return;
     }
@@ -160,7 +159,7 @@
     output_messages.push({role: "user", content: parse_whole(message)});
     thinking = true;
     const response = await ol.chat({
-      model: model,
+      model: settings.model,
       messages: messages,
       // I truly dont know why this is erroring, so im just gonna ignore it
       // @ts-ignore
@@ -186,7 +185,7 @@
   }
 
   async function regen() {
-    if(model == ""){
+    if(settings.model == ""){
       notify("Error: No model loaded", "Please select a model from the settings menu", 5000);
       return;
     }
@@ -194,7 +193,7 @@
     output_msg = [{type: "normal", content: ""}];
     thinking = true;
     const response = await ol.chat({
-      model: model,
+      model: settings.model,
       messages: messages,
       // I truly dont know why this is erroring, so im just gonna ignore it
       // @ts-ignore
@@ -231,31 +230,15 @@
     }
   }
 
-  const toggleSettings = async () => {
-    if(settings_status == "hidden"){
+  const init = async() => {
+    console.log(settings.model);
+    if(settings.model == "Load a model..."){
       let response = await ol.list();
       models = response.models;
-      model = models[0].name;
-      console.log(models);
-      settings_status = '';
-    } else {
-      settings_status = "hidden";
-      messages = [];
-      messages.push({role: "system", content: system_prompt});
-      output_messages = [];
+      settings.model = models[0].name;
     }
-    console.log(messages);
   }
 
-  const export_settings = () => {
-      const blob = new Blob([JSON.stringify({name: name, system: system_prompt})], { type: 'application/json', });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${name}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-  }
 
   const handleFileChange = (e) => { 
     const reader = new FileReader();
@@ -272,6 +255,9 @@
       }
     }
   };
+
+  init()
+
 </script>
 
 <label for="closeNotif" class="notification {n_status}">
@@ -280,63 +266,6 @@
 </label>
 
 <button style="position: fixed; visibility: hidden;" id="closeNotif" onclick={() => {n_status = "hidden";}}>Close</button>
-<label for="close" class="blocker {settings_status}"></label>
-<div class="settings {settings_status}">
-
-  <input
-  
-    type="text"
-    bind:value={name}
-    placeholder="Name"
-    style ="
-      height: 10%;
-    "
-  >
-
-  <textarea
-    style="height: 60%;"
-    bind:value={system_prompt}
-    placeholder="System prompt"
-  >
-  </textarea>
-
-  <div class="dropdown controlItem">
-    Current model
-    <button class="hoverButton controlItem">{model}</button>
-
-    <div class="content">
-      {#each models as m}
-        <button onclick={() => {model = m.name;}} class="dropButton controlItem">{m.name}</button>
-      {/each}
-    </div>
-  </div>
-
-    <span style="height: 10%;">
-      <label for="export" class="controlLabel highlight">
-        <p1>Export</p1>
-      </label>
-
-      <!-- svelte-ignore a11y_consider_explicit_label -->
-      <button id="export" onclick={export_settings} class="controlLabel highlight"
-        style="visibility: hidden; position: fixed;"
-      ></button>
-
-      <label class="controlLabel highlight" for="load">
-        <p1>Load</p1>
-      </label>
-      <input
-        id="load"
-        type="file"
-        placeholder="Load"
-        style="position: fixed; visibility: hidden"
-        onchange={handleFileChange} 
-      >
-    </span>
-    <label class="controlLabel highlight" for="close">
-      <p1>Done</p1>
-    </label>
-    <button id="close" style="visibility: hidden; position: fixed;" onclick={toggleSettings}>Done</button>
-</div>
 
 <div class="chat">
 
@@ -412,13 +341,19 @@
         bind:value={message}
       >
       <span class="controlBar" style="background: none; width: 100%; height: 50px;">
-        <p1>{name}</p1>
+        {#if parse_model_name(settings.model).model.length >= 17}
+          <p1>{parse_model_name(settings.model).model.substring(0, 17)}...</p1>
+        {:else}
+          <p1>{parse_model_name(settings.model).model}</p1>
+        {/if}
+        <p1>{"  -  "}</p1>
+        <p1>{settings.name}</p1>
         {#if !thinking}
-          <button onclick={toggleSettings} class="icon highlight">_</button>
+          <button onclick={() => replace("/settings")} class="icon highlight">_</button>
         {:else}
           <button onclick={
-            () => {
-              ol.abort();
+            async () => {
+              await ol.abort();
               messages.push({role: "assistant", content: ai_response});
               output_messages.push({role: "assistant", content: parse_whole(ai_response)});
               thinking = false;
@@ -442,7 +377,7 @@
     box-sizing: border-box;
     padding: 20px;
     border: 2px solid var(--main-color);
-    background-color: #1a1a1a;
+    background-color: var(--bg-color);
     border-radius: 20px;
     opacity: 1;
     transition: 
@@ -457,11 +392,11 @@
   }
 
   .msg1{
-    transform: translateY(-37.5vh);
+    top: calc(50vh - (max(125px, 15vh) / 2)) !important;
   }
 
   .controlLabel {
-    background-color: #1a1a1a;
+    background-color: var(--bg-color);
     display: flex;
     box-sizing: border-box;
     flex-direction: column;
@@ -476,8 +411,8 @@
   }
 
   .editMsg {
-    width: 80%;
-    background-color: #2f2f2f;
+    width: 60%;
+    background-color: var(--control-color);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
     border: 2px solid var(--main-color);
@@ -487,34 +422,17 @@
   }
 
   .controlBar {
-    width: 100%;
+    width: 60%;
     height: 50px;
     align-items: right;
     justify-content: right;
-    width: 80%;
     display: flex;
     border-bottom-left-radius: 10px;
     border-bottom-right-radius: 10px;
     flex-direction: row;
     gap: 10px;
     box-sizing: border-box;
-    background-color: #242424;
-  }
-
-  .ast {
-    color: rgb(25, 191, 209);
-  }
-
-  .quote {
-    color: rgb(232, 127, 29);
-  }
-
-  .code {
-    background-color: #1a1a1a;
-    display: flex;
-    box-sizing: border-box;
-    padding: 10px;
-    border-radius: 10px;
+    background-color: var(--body-color);
   }
 
   .header {
@@ -533,11 +451,11 @@
   }
 
   .message {
-    width: 80%;
+    width: 60%;
     padding: 10px;
     display: flex;
     box-sizing: border-box;
-    background-color: #2f2f2f;
+    background-color: var(--control-color);
     border-top-right-radius: 10px;
     border-top-left-radius: 10px;
     flex-direction: column;
@@ -556,11 +474,11 @@
   }
 
   .user {
-    margin-left: 20%;
+    margin-left: 40%;
   }
 
   .assistant {
-    margin-right: 20%;
+    margin-right: 40%;
   }
 
   .role {
@@ -589,16 +507,17 @@
 
   .msgBar {
     position: fixed;
-    top: 80vh;
+    top: calc(100vh - max(125px, 15vh) - 50px);
     width: 90vw;
     height: 15vh;
-    background-color: #242424;
+    background-color: var(--body-color);
     display: flex;
     box-sizing: border-box;
     flex-direction: column;
+    min-height: 125px;
     border-radius: 20px;
-    transition:
-      transform 750ms ease
+    transition: 
+      top 250ms ease
     ;
   }
 
@@ -641,7 +560,7 @@
     padding: 15px;
     font-size: 24px;
     display: flex;
-    background-color: #1a1a1a;
+    background-color: var(--bg-color);
     border: none;
     border-radius: 10px;
     resize: none;
@@ -659,6 +578,8 @@
 
   .hidden {
     transform: translateY(-100vh);
+    /* I truly don't know why this wont work without the !important directive, but it doesn't, so there ya go*/
+    opacity: 0 !important;
   }
 
   .blocker {
@@ -670,8 +591,10 @@
     left: 0;
     z-index: 50;
     scale: 1;
+    opacity: 1;
     transition:
-      transform 1000ms ease
+      transform 1000ms ease,
+      opacity 1000ms ease
     ;
   }
 
@@ -690,8 +613,10 @@
     padding: 2em;
     gap: 2px;
     flex-direction: column;
+    opacity: 1;
     transition:
-      transform 1000ms ease
+      transform 1000ms ease,
+      opacity 1000ms ease
     ;
   }
 </style>
