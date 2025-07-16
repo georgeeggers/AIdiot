@@ -77,6 +77,10 @@
     </textarea>
 </div>
 
+<div class="charInfo">
+    <button class="h{settings.tools}" onclick={() => settings.tools = !settings.tools}>Use Tools: {settings.tools}</button>
+</div>
+
 <div class="container">
 
 {#if models.length != 0}
@@ -168,12 +172,12 @@ textarea {
     font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
 }
 
-.selected {
+.selected, .htrue {
     border: 2px solid var(--main-color) !important;
     color:var(--main-color);
 }
 
-.modelCard button {
+.modelCard button, .charInfo button {
     background: none;
     cursor: pointer;
     border: 2px solid white;

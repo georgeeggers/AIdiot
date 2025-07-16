@@ -442,6 +442,14 @@
     });
   };
 
+  const process_message = () => {
+    if(settings.tools){
+      use_tools(message);
+    } else {
+      send();
+    }
+  }
+
   init();
 </script>
 
@@ -533,7 +541,7 @@
   <span style="width: 100vw; height: 20vh"> </span>
   <span class="msgBar msg{messages.length}">
     <input
-      onkeydown={(e) => e.key === "Enter" && use_tools(message)}
+      onkeydown={(e) => e.key === "Enter" && process_message()}
       type="text"
       placeholder="Type a message"
       bind:value={message}

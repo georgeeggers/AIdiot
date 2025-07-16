@@ -2,7 +2,7 @@
 
 import { Ollama } from "ollama";
 
-export let settings = $state({name: "ChatBot", system: "You are ChatBot, a helpful AI assistant", streaming: true, model: "Load a model..."})
+export let settings = $state({name: "ChatBot", system: "You are ChatBot, a helpful AI assistant", streaming: true, model: "Load a model...", tools: false})
 
 export const export_settings = () => {
     const blob = new Blob([JSON.stringify({name: settings.name, system: settings.system})], { type: 'application/json', });
