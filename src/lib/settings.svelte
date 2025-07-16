@@ -48,7 +48,6 @@
                                 }
                             ]
                         }
-                    
                     );
                 }
             }
@@ -57,21 +56,37 @@
 
     init();
 
-
+    
 
 </script>
 
 <button class="icon highlight" onclick={() => replace("/")}>{"<"}</button>
 
+<div class="charInfo">
+    <textarea
+        style="width: 10%;"
+        bind:value={settings.name}
+    >
+
+    </textarea>
+    <textarea
+        style="width: 90%;"
+        bind:value={settings.system}
+        
+    >
+    </textarea>
+</div>
+
 <div class="container">
 
-{#each models as m, index}
+{#if models.length != 0}
+
+{#each models as m}
 
 
     <div class="modelCard">
 
         <p1 class="modelName">{m.name}</p1>
-
 
         {#each m.sizes as size}
             <button
@@ -82,15 +97,25 @@
             </button>
         {/each}
 
-
     </div>
 
 {/each}
+
+{:else}
+
+    <div class="modelCard">
+
+        <p1 class="modelName">Check out Hugging Face or Ollama and download some models!</p1>
+
+    </div>
+
+{/if}
 
 </div>
 
 
 <style>
+
 
 .container {
     width: 100%;
@@ -101,6 +126,46 @@
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     grid-template-rows: masonry;
     gap: 20px;
+}
+
+/*
+.container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    flex-wrap: wrap;
+    padding: 1em;
+    box-sizing: border-box;
+    gap: 20px;
+    align-items: center;
+    justify-content: center;
+}
+*/
+
+.charInfo {
+    width: 100%;
+    height: 100%;
+    padding: 1em;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+
+}
+
+textarea {
+    resize: none;
+    min-height: 100px;
+    height: 100%;
+    display: flex;
+    padding: 10px;
+    box-sizing: border-box;
+    border: 2px solid transparent;
+    border-radius: 15px;
+    font-size: 20px;
+    font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
 }
 
 .selected {

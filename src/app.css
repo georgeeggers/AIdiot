@@ -49,6 +49,10 @@
   background: none;
 }
 
+textarea:focus {
+  outline: none;
+}
+
 .highlight {
   color: white;
   transition:
