@@ -1,8 +1,14 @@
 <script>
+    import { onMount } from "svelte";
     import { settings, ol, parse_model_name } from "../global.svelte";
 
     import { replace } from "svelte-spa-router";
     let models = $state([]);
+
+    let columns = $state(3);
+    let outputModels = $state([[]]);
+    const masonryWidth = 275;
+
     const init = async () => {
         let response = await ol.list();
         for(let i of response.models){
@@ -52,11 +58,46 @@
                 }
             }
         }
+
+        // SETUP MASONRY
+
+        const width = window.innerWidth;
+        let number = Math.floor(width / masonryWidth);
+        columns = number;
+        outputModels = [];
+        for(let i = 0; i < columns; i++){
+            outputModels.push([]);
+        }
+        for(let i = 0; i < models.length; i++){
+            outputModels[i % columns].push(models[i]);
+        }
+        console.log(outputModels);
     }
 
     init();
 
-    
+    const do_stuff = () => {
+        const width = window.innerWidth;
+        let number = Math.floor(width / masonryWidth);
+        if(columns != number && number != 0){
+            columns = number;
+            outputModels = [];
+            for(let i = 0; i < columns; i++){
+                outputModels.push([]);
+            }
+            for(let i = 0; i < models.length; i++){
+                outputModels[i % columns].push(models[i]);
+            }
+            console.log(outputModels);
+        }
+    }
+
+    onMount(() => {
+        do_stuff()
+        window.addEventListener('resize', () => {
+            do_stuff();
+        })
+    });
 
 </script>
 
@@ -79,29 +120,36 @@
 
 <div class="charInfo">
     <button class="h{settings.tools}" onclick={() => settings.tools = !settings.tools}>Use Tools: {settings.tools}</button>
+    <button class="h{settings.streaming}" onclick={() => settings.streaming = !settings.streaming}>Streaming: {settings.streaming}</button>
 </div>
 
 <div class="container">
 
 {#if models.length != 0}
 
-{#each models as m}
+{#each outputModels as list, i}
+    <div class="column">
+        {#each list as m}
 
+            <div class="modelCard">
 
-    <div class="modelCard">
+                <p1 class="modelName">{m.name}</p1>
 
-        <p1 class="modelName">{m.name}</p1>
+                {#each m.sizes as size}
+                    <button
+                        class="{settings.model == size.name ? 'selected' : ''}"
+                        onclick={() => { settings.model = size.name }}
+                    >
+                    {size.id} GB
+                    </button>
+                {/each}
 
-        {#each m.sizes as size}
-            <button
-                class="{settings.model == size.name ? 'selected' : ''}"
-                onclick={() => { settings.model = size.name }}
-            >
-            {size.id} GB
-            </button>
+            </div>
+
         {/each}
-
     </div>
+
+
 
 {/each}
 
@@ -124,11 +172,19 @@
 .container {
     width: 100%;
     height: 100%;
-    display: grid;
-    padding: 1em;
+    display: flex;
+    flex-direction: row;
     box-sizing: border-box;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    grid-template-rows: masonry;
+    padding: 20px;
+    gap: 20px;
+}
+
+.column {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
     gap: 20px;
 }
 
@@ -182,11 +238,11 @@ textarea {
     cursor: pointer;
     border: 2px solid white;
     display: flex;
-    text-align: left;
     font-size: 16px;
     padding: 10px;
     border-radius: 20px;
     width: fit-content;
+    align-items: center;
     transition:
         border-color 250ms ease,
         color 250ms ease

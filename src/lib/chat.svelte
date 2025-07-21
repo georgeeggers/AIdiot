@@ -61,7 +61,7 @@
     if(Math.random() % 10 == 1){
         return `The text message to ${recipient} failed to send.`;
     }
-    return `You succesfully sent the message\n${message}\nto ${recipient}`
+    return `You succesfully sent the message \"${message}\" to \"${recipient}\"`
   }
 
   const tools = {
@@ -186,27 +186,35 @@
       );
       return;
     }
-    ai_response = "";
-    output_msg = [{ type: "normal", content: "" }];
+    if(!settings.streaming){
+      output_msg = [{ type: "ast", content: "Thinking..." }];
+    } else {
+      output_msg = [{ type: "normal", content: "" }];
+    }
     messages.push({ role: "user", content: message });
     scrolldown();
     output_messages.push({ role: "user", content: parse_whole(message) });
+    message = "";
     thinking = true;
     const response = await ol.chat({
       model: settings.model,
       messages: messages,
       // I truly dont know why this is erroring, so im just gonna ignore it
       // @ts-ignore
-      stream: stream_status,
+      stream: settings.streaming,
     });
-    message = "";
+    ai_response = "";
     index = 0;
-    for await (const part of response) {
-      ai_response += part.message.content;
-      for (let i of part.message.content) {
-        parser(i);
-        scrolldown();
+    if(settings.streaming){
+      for await (const part of response) {
+        ai_response += part.message.content;
+        for (let i of part.message.content) {
+          parser(i);
+          scrolldown();
+        }
       }
+    } else {
+      ai_response = response.message.content;
     }
     thinking = false;
 
@@ -230,26 +238,36 @@
       );
       return;
     }
-    ai_response = "";
-    output_msg = [{ type: "normal", content: "" }];
+
+    if(!settings.streaming){
+      output_msg = [{ type: "ast", content: "Thinking..." }];
+    } else {
+      output_msg = [{ type: "normal", content: "" }];
+    }
+    scrolldown();
     thinking = true;
     const response = await ol.chat({
       model: settings.model,
       messages: messages,
       // I truly dont know why this is erroring, so im just gonna ignore it
       // @ts-ignore
-      stream: stream_status,
+      stream: settings.streaming,
     });
-    message = "";
+    ai_response = "";
     index = 0;
-    for await (const part of response) {
-      ai_response += part.message.content;
-      for (let i of part.message.content) {
-        parser(i);
-        scrolldown();
+    if(settings.streaming){
+      for await (const part of response) {
+        ai_response += part.message.content;
+        for (let i of part.message.content) {
+          parser(i);
+          scrolldown();
+        }
       }
+    } else {
+      ai_response = response.message.content;
     }
     thinking = false;
+
 
     messages.push({ role: "assistant", content: ai_response });
     output_messages.push({
@@ -310,11 +328,13 @@
       return;
     }
     ai_response = "";
-    output_msg = [{ type: "normal", content: "" }];
+
     messages.push({ role: "user", content: message });
     scrolldown();
     output_messages.push({ role: "user", content: parse_whole(message) });
     thinking = true;
+    message = "";
+    output_msg = [{ type: "normal", content: "Identifying tools..." }];
     let temp_messages = [
       {
         role: "system",
@@ -391,18 +411,21 @@
         // @ts-ignore
         for (let i of stuff.tools) {
           try {
-            sys_context += tools[i.tool_name](i.parameters) + "\n";
+            let result = tools[i.tool_name](i.parameters) + "\n";
+            sys_context += result;
+            output_messages.push({ role: "tool", content: parse_whole("Tool \"" + i.tool_name + '\" called\n' + result) })
           } catch (Err) {
             sys_context +=
               "The call to " +
               i.tool_name +
               " failed, and returned the error " +
               Err;
+            output_messages.push({ role: "tool", content: parse_whole("Attempt to call \"" + i.tool_name + '\" errored\n' + Err) })
+            
           }
         }
         console.log(sys_context);
         messages.push({ role: "tool", content: sys_context });
-        output_messages.push({ role: "tool", content: parse_whole(sys_context) })
         break;
       } else if (
         response.message.content.substring(0, 9) == "[NO_TOOL]" ||
@@ -417,21 +440,32 @@
     }
 
     // actually run the question
-
+    if(!settings.streaming){
+      output_msg = [{ type: "ast", content: "Thinking..." }];
+    } else {
+      output_msg = [{ type: "normal", content: "" }];
+    }
+    scrolldown();
     const finalResponse = await ol.chat({
       model: settings.model,
       messages: messages,
-      stream: true,
+      // @ts-ignore
+      stream: settings.streaming
     });
 
-    message = "";
+    thinking = true;
+    ai_response = "";
     index = 0;
-    for await (const part of finalResponse) {
-      ai_response += part.message.content;
-      for (let i of part.message.content) {
-        parser(i);
-        scrolldown();
+    if(settings.streaming){
+      for await (const part of finalResponse) {
+        ai_response += part.message.content;
+        for (let i of part.message.content) {
+          parser(i);
+          scrolldown();
+        }
       }
+    } else {
+      ai_response = finalResponse.message.content;
     }
     thinking = false;
 
@@ -699,11 +733,6 @@
     margin-right: 60%;
     border-radius: 15px;
     background-color: var(--body-color);
-  }
-
-  .tool * {
-    font-style: italic;
-
   }
 
   .role {
