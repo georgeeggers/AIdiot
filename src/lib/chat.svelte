@@ -2,13 +2,10 @@
   import { tick } from "svelte";
   import {
     settings,
-    export_settings,
     ol,
     parse_model_name,
   } from "../global.svelte";
   import { replace } from "svelte-spa-router";
-  let name = $state("ChatBot");
-  let aggressive_retention = $state(false);
 
   let mapping = [
     {

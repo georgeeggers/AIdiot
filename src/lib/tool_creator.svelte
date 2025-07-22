@@ -9,6 +9,7 @@
     import { tags } from '@lezer/highlight';
     import { onMount } from 'svelte';
     import { EditorState } from "@codemirror/state";
+    import { settings } from '../global.svelte';
 
     const ivory = "#abb2bf", stone = "#7d8799", darkBackground = "#21252b", highlightBackground = "#2c313a", background = "#282c34", tooltipBackground = "#353a42", selection = "#3E4451", cursor = "#528bff";
 
@@ -87,7 +88,15 @@
     onMount(() => {
         editor = new EditorView({
             parent: document.getElementById("editor"),
-            doc: "const functionName = (args) => {\n\n/* ----- Your Code Below ----- */\n\n\n\n}",
+            doc: 
+`
+/* ----- Your Code Below ----- */
+
+
+
+
+
+`,
             // extensions: [basicSetup, javascript(), myTheme, syntaxHighlighting(myHighlightStyle)]
             extensions: [basicSetup, javascript(), myTheme, syntaxHighlighting(myHighlightStyle), keymap.of([indentWithTab])]
         });
@@ -107,13 +116,14 @@
         });
     })
 
+    let functionName = $state("testFunc");
     let argName = $state("");
     let argType = $state("");
     let argDescription = $state("")
     let paramCount = $state(0);
     const addParam = () => {
         let parts = editor.state.doc.toString().split('\n');
-        parts[paramCount + 1] = "  const " + argName + " = args." + argName + ";\n";
+        parts[paramCount] = "  const " + argName + " = args." + argName + ";\n";
         let total = "";
         for(let i of parts){
             total += i + '\n';
@@ -124,7 +134,7 @@
         });
 
         parts = description.state.doc.toString().split('\n');
-        parts[(paramCount * 4) + 4] = "      " + argName + ": {\n        type: " + argType + ",\n        description: " + argDescription + "\n      },";
+        parts[(paramCount * 4) + 4] = "      " + argName + ": {\n        type: \"" + argType + "\",\n        description: \"" + argDescription + "\"\n      },\n";
         total = "";
         for(let i of parts){
             total += i + '\n';
@@ -134,6 +144,16 @@
             changes: { from: 0, to: endPosition, insert: total}
         });
         paramCount++;
+    }
+
+    const addTool = () => {
+        // the tool should contain code to push it the the list in itself
+        let thing = new Function('args', editor.state.doc.toString());
+        settings.tool_definitions[functionName] = {
+            func: thing,
+            description: description.state.doc.toString()
+        };
+        settings.tool_definitions[functionName].func({location: "Tucson"});
     }
 </script>
 
@@ -162,6 +182,8 @@
 
 <div id="description" class="description"></div>
 
+<button onclick={addTool}>Add Tool</button>
+
 <style>
     .editor {
         width: 100%;
@@ -186,7 +208,7 @@
         padding: 5px;
         min-height: 10px;
         font-size: 16px;
-        font-family: 'consolas';
+        font-family: 'monospace';
         border: none;
         border-radius: 5px;
         background-color: #282c34;
