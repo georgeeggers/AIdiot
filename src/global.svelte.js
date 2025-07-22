@@ -2,7 +2,7 @@
 
 import { Ollama } from "ollama";
 
-export let settings = $state({name: "ChatBot", system: "You are ChatBot, a helpful AI assistant", streaming: true, model: "Load a model...", tools: false})
+export let settings = $state({name: "ChatBot", system: "You are ChatBot, a helpful AI assistant", streaming: true, model: "Load a model...", tools: false, debugMode: false})
 
 export const export_settings = () => {
     const blob = new Blob([JSON.stringify({name: settings.name, system: settings.system})], { type: 'application/json', });
@@ -48,5 +48,22 @@ export const parse_model_name = (input) => {
 
     return output;
 }
+
+const handleFileChange = (e) => {
+    const reader = new FileReader();
+    reader.readAsText(e.target.files[0]);
+    reader.onload = (event) => {
+        const content = event.target.result;
+        try {
+            // @ts-ignore
+            let json = JSON.parse(content);
+
+        } catch {
+            console.log("Error!!!");
+        }
+    };
+};
+
+
   
 export const ol = new Ollama({host: "http://localhost:11434"});

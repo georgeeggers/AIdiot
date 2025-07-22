@@ -6,13 +6,12 @@
     let models = $state([]);
 
     let columns = $state(3);
-    let outputModels = $state([[]]);
+    let outputModels = $state([]);
     const masonryWidth = 275;
 
     const init = async () => {
         let response = await ol.list();
         for(let i of response.models){
-            console.log(i);
             if(models.length == 0){
                 models.push(
                     {
@@ -23,7 +22,8 @@
                                 id: Math.round(i.size * 0.00000001) / 10,
                                 name: i.name
                             }
-                        ]
+                        ],
+                        height: Math.ceil(parse_model_name(i.name).model.length / 13) + 1
                     }
                 
                 );
@@ -36,6 +36,7 @@
                             id: Math.round(i.size * 0.00000001) / 10,
                             name: i.name
                         });
+                        models[j].height++;
                         newModel = false;
                         break;
                     }
@@ -52,7 +53,8 @@
                                     id: Math.round(i.size * 0.00000001) / 10,
                                     name: i.name
                                 }
-                            ]
+                            ],
+                            height: Math.ceil(parse_model_name(i.name).model.length / 13) + 1
                         }
                     );
                 }
@@ -61,17 +63,37 @@
 
         // SETUP MASONRY
 
+        models.sort((a, b) => {
+            if(a.height < b.height){
+                return 1;
+            } else if (a.height > b.height){
+                return -1;
+            }
+            return 0;
+        });
+
         const width = window.innerWidth;
         let number = Math.floor(width / masonryWidth);
         columns = number;
         outputModels = [];
         for(let i = 0; i < columns; i++){
-            outputModels.push([]);
+            outputModels.push({
+                height: 0, content: []
+            });
         }
         for(let i = 0; i < models.length; i++){
-            outputModels[i % columns].push(models[i]);
+            let index = 0;
+            // jesus help us
+            let min = Number.MAX_SAFE_INTEGER;
+            for(let j = 0; j < outputModels.length; j++){
+                if(outputModels[j].height < min){
+                    min = outputModels[j].height;
+                    index = j;
+                }
+            }
+            outputModels[index].content.push(models[i]);
+            outputModels[index].height += models[i].height;
         }
-        console.log(outputModels);
     }
 
     init();
@@ -83,12 +105,23 @@
             columns = number;
             outputModels = [];
             for(let i = 0; i < columns; i++){
-                outputModels.push([]);
+                outputModels.push({
+                    height: 0, content: []
+                });
             }
             for(let i = 0; i < models.length; i++){
-                outputModels[i % columns].push(models[i]);
+                let index = 0;
+                // jesus help us
+                let min = Number.MAX_SAFE_INTEGER;
+                for(let j = 0; j < outputModels.length; j++){
+                    if(outputModels[j].height < min){
+                        min = outputModels[j].height;
+                        index = j;
+                    }
+                }
+                outputModels[index].content.push(models[i]);
+                outputModels[index].height += models[i].height;
             }
-            console.log(outputModels);
         }
     }
 
@@ -121,6 +154,7 @@
 <div class="charInfo">
     <button class="h{settings.tools}" onclick={() => settings.tools = !settings.tools}>Use Tools: {settings.tools}</button>
     <button class="h{settings.streaming}" onclick={() => settings.streaming = !settings.streaming}>Streaming: {settings.streaming}</button>
+    <button class="h{settings.debugMode}" onclick={() => settings.debugMode = !settings.debugMode}>Debug: {settings.debugMode}</button>
 </div>
 
 <div class="container">
@@ -129,7 +163,10 @@
 
 {#each outputModels as list, i}
     <div class="column">
-        {#each list as m}
+        {#if settings.debugMode}
+        <h1>{list.height}</h1>
+        {/if}
+        {#each list.content as m}
 
             <div class="modelCard">
 
@@ -263,7 +300,7 @@ textarea {
 
 .modelName {
     font-size: 28px;
-    text-wrap: balance;
+    line-height: 40px;
 }
 
 .modelCard {

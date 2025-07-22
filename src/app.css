@@ -60,6 +60,14 @@ textarea:focus {
   ;
 }
 
+.cm-editor, .cm-scroller {
+  border-radius: 10px;
+}
+
+.cm-editor * {
+  font-size: 16px;
+}
+
 .highlight:hover {
   color: var(--main-color);
 }

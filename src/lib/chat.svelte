@@ -8,8 +8,6 @@
   } from "../global.svelte";
   import { replace } from "svelte-spa-router";
   let name = $state("ChatBot");
-  let system_prompt = $state("You are ChatBot, a helpful AI assistant");
-  let stream_status = $state(true);
   let aggressive_retention = $state(false);
 
   let mapping = [
@@ -27,13 +25,73 @@
     },
   ];
 
+  const is_key = (input, map) => {
+    let t_index = 0;
+    for (let i of map) {
+      if (i.id == input) {
+        return t_index;
+      }
+      t_index++;
+    }
+    return -1;
+  };
+  
+  const parse_whole = (input) => {
+    let output_msg = [{ type: "normal", content: "" }];
+    let mapping = [
+      {
+        id: "*",
+        type: "ast",
+      },
+      {
+        id: '"',
+        type: "quote",
+      },
+      {
+        id: "`",
+        type: "code",
+      },
+    ];
+
+    let index = 0;
+    let sub_index = 0;
+    let mode = "";
+    output_msg[index].type = "normal";
+    for (let i of input) {
+      sub_index = is_key(i, mapping);
+      if (sub_index != -1) {
+        if (mode == "") {
+          output_msg.push({ type: mapping[sub_index].type, content: "" });
+          mode = i;
+          index++;
+        } else if (mode == i) {
+          output_msg[index].content += mapping[sub_index].id;
+          output_msg.push({ type: "normal", content: "" });
+          index++;
+          mode = "";
+          continue;
+        }
+      }
+      output_msg[index].content += i;
+    }
+    index = 0;
+    for (let i of output_msg) {
+      if (i.content == "") {
+        output_msg.splice(index, 1);
+      }
+      index++;
+    }
+    return output_msg;
+  };
+
+
   // this is where the system prompt is first injected
   // svelte-ignore state_referenced_locally
   let messages = $state([{ role: "system", content: settings.system }]);
   let message = $state("");
   let ai_response = $state("Type a message to ask me a question");
   let thinking = $state(false);
-  let output_messages = $state([]);
+  let output_messages = $state([{ role: "system", content: parse_whole(settings.system) }]);
   let settings_status = $state("hidden");
   let output_msg = $state([{ type: "normal", content: "" }]);
   let index = $state(0);
@@ -86,17 +144,6 @@
 
   // test the tool functionality in ollama
 
-  const is_key = (input, map) => {
-    let t_index = 0;
-    for (let i of map) {
-      if (i.id == input) {
-        return t_index;
-      }
-      t_index++;
-    }
-    return -1;
-  };
-
   const parser = async (input) => {
     let sub_index = 0;
     for (let i of input) {
@@ -127,54 +174,6 @@
       sub_index++;
     }
     */
-  };
-
-  const parse_whole = (input) => {
-    let output_msg = [{ type: "normal", content: "" }];
-    let mapping = [
-      {
-        id: "*",
-        type: "ast",
-      },
-      {
-        id: '"',
-        type: "quote",
-      },
-      {
-        id: "`",
-        type: "code",
-      },
-    ];
-
-    let index = 0;
-    let sub_index = 0;
-    let mode = "";
-    output_msg[index].type = "normal";
-    for (let i of input) {
-      sub_index = is_key(i, mapping);
-      if (sub_index != -1) {
-        if (mode == "") {
-          output_msg.push({ type: mapping[sub_index].type, content: "" });
-          mode = i;
-          index++;
-        } else if (mode == i) {
-          output_msg[index].content += mapping[sub_index].id;
-          output_msg.push({ type: "normal", content: "" });
-          index++;
-          mode = "";
-          continue;
-        }
-      }
-      output_msg[index].content += i;
-    }
-    index = 0;
-    for (let i of output_msg) {
-      if (i.content == "") {
-        output_msg.splice(index, 1);
-      }
-      index++;
-    }
-    return output_msg;
   };
 
   async function send() {
@@ -223,10 +222,6 @@
       role: "assistant",
       content: parse_whole(ai_response),
     });
-    // pushes system prompt after every message so that the model maintains it's system
-    if (aggressive_retention) {
-      messages.push({ role: "system", content: system_prompt });
-    }
   }
 
   async function regen() {
@@ -274,10 +269,7 @@
       role: "assistant",
       content: parse_whole(ai_response),
     });
-    // pushes system prompt after every message so that the model maintains it's system
-    if (aggressive_retention) {
-      messages.push({ role: "system", content: system_prompt });
-    }
+
   }
 
   const delete_to = (pos) => {
@@ -293,7 +285,6 @@
   };
 
   const init = async () => {
-    console.log(settings.model);
     if (settings.model == "Load a model...") {
       let response = await ol.list();
       models = response.models;
@@ -301,21 +292,7 @@
     }
   };
 
-  const handleFileChange = (e) => {
-    const reader = new FileReader();
-    reader.readAsText(e.target.files[0]);
-    reader.onload = (event) => {
-      const content = event.target.result;
-      try {
-        // @ts-ignore
-        let json = JSON.parse(content);
-        name = json.name;
-        system_prompt = json.system;
-      } catch {
-        console.log("Error!!!");
-      }
-    };
-  };
+
 
   const use_tools = async (question) => {
     // this first message will simply determine if the user requested something that would warrant tools or not
@@ -396,11 +373,8 @@
         response.message.content.substring(0, 11) == "[TOOL_CALL]" ||
         response.message.content.substring(0, 13) == '"[TOOL_CALL]"'
       ) {
-        console.log("Tool called!");
-        let sys_context =
-          "Here are the responses from your tools calls. This should provide information to aid your response. Do not mention you got aid from tool calls, with the exception of if the tool returned an error\n";
+        let sys_context = "Here are the responses from your tools calls. Use this information to respond to the user\n";
         let stuff = response.message.content.split("[TOOL_CALL]")[1];
-        console.log(stuff);
         try {
           stuff = JSON.parse(stuff);
         } catch (Err) {
@@ -420,12 +394,12 @@
               i.tool_name +
               " failed, and returned the error " +
               Err;
-            output_messages.push({ role: "tool", content: parse_whole("Attempt to call \"" + i.tool_name + '\" errored\n' + Err) })
+              output_messages.push({ role: "tool", content: parse_whole("Attempt to call \"" + i.tool_name + '\" errored\n' + Err) })
             
           }
         }
-        console.log(sys_context);
-        messages.push({ role: "tool", content: sys_context });
+        messages.push({ role: "system", content: sys_context });
+        output_messages.push({role: "system", content: parse_whole(sys_context)});
         break;
       } else if (
         response.message.content.substring(0, 9) == "[NO_TOOL]" ||
@@ -452,6 +426,7 @@
       // @ts-ignore
       stream: settings.streaming
     });
+
 
     thinking = true;
     ai_response = "";
@@ -502,7 +477,7 @@
 
 <div class="chat">
   {#each output_messages as msg, i}
-    {#if msg.role != "system"}
+    {#if msg.role != "system" || settings.debugMode}
       <div class="messageContainer">
         {#if edit_index == i + 1 && edit_vis}
           <textarea class="editMsg" bind:value={messages[i + 1].content}>
@@ -526,7 +501,6 @@
                     if (!edit_vis) {
                       edit_index = i + 1;
                       edit_vis = true;
-                      console.log(messages);
                     }
                   }}
                   class="icon highlight">E</button
@@ -545,11 +519,11 @@
               <button onclick={() => delete_to(i)} class="icon highlight"
                 >B</button
               >
-              {:else if msg.role == "user"}
-                <button onclick={() => delete_to(i)} class="icon highlight"
-                  >U</button
-                >
-              {/if}
+            {:else if msg.role == "user"}
+              <button onclick={() => delete_to(i)} class="icon highlight"
+                >U</button
+              >
+            {/if}
           </span>
         {/if}
       </div>
@@ -733,6 +707,15 @@
     margin-right: 60%;
     border-radius: 15px;
     background-color: var(--body-color);
+  }
+
+  .system {
+    width: 100%;
+    margin-right: 0%;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    background: none;
   }
 
   .role {
